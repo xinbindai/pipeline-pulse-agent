@@ -16,9 +16,8 @@ deploy/*.env
 # ADK runtime state
 .adk/
 
-# Node / Next.js (frontend)
-node_modules/
-.next/
-.env.local
+# Chainlit runtime
+.chainlit/
+.files/
 
 tmp/

@@ -1,0 +1,20 @@
+# Keep the build context small and free of secrets/artifacts.
+.git
+.venv
+**/__pycache__
+**/*.pyc
+**/.adk
+.chainlit
+.files
+
+# Secrets — passed at runtime (--env-file / Cloud Run), never baked in.
+**/.env
+**/.env.local
+
+# Not needed in the image
+deploy/
+tmp/
+pyproject.toml
+uv.lock
+start-llamacpp.sh
+README.md
