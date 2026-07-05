@@ -1,0 +1,9 @@
+# Secrets are passed at runtime (--env-file / compose env_file / Cloud Run), not baked in.
+.env
+.env.local
+__pycache__
+*.pyc
+.adk
+Dockerfile
+.dockerignore
+README.md

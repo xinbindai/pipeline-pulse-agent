@@ -1,0 +1,13 @@
+# Runtime deps for the combined Docker image (agent + AG-UI backend).
+# The Next.js UI deps live in ag_ui_backend/frontend/package.json.
+
+# AG-UI backend
+ag-ui-adk>=0.7.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# ADK agent
+google-adk>=1.0.0
+mcp>=1.28                # required for ADK's McpToolset (MCP client tools)
+litellm>=1.50.0          # non-Gemini + self-hosted (LLM_BASE_URL) model paths
+python-dotenv>=1.0.0
