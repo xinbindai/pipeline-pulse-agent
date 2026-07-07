@@ -46,6 +46,26 @@ adk web .
 | `LLM_MODEL` | `anthropic/claude-opus-4-8` (default), `openai/gpt-4.1`, `gemini-flash-latest`, or a self-hosted model name. |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` | Key matching the chosen model. |
 | `LLM_BASE_URL` | Optional. OpenAI-compatible endpoint of a self-hosted engine; when set, no real API key is required. |
+| `CHROMA_HOST` / `CHROMA_PORT` / `CHROMA_SSL` / `CHROMA_COLLECTION` | Optional. When `CHROMA_HOST` is set, a **RAG subagent** is added (see below). |
+
+### RAG subagent (remote Chroma)
+
+Set `CHROMA_HOST` (+ `CHROMA_PORT`, `CHROMA_SSL`, `CHROMA_COLLECTION`) to add a
+`rag_agent` subagent. The root agent delegates knowledge-base / document lookups
+to it; the subagent searches the given Chroma collection via a stdio
+[`chroma-mcp`](https://pypi.org/project/chroma-mcp/) server (HTTP client to your
+remote Chroma).
+
+**Install `chroma-mcp` isolated** — it pins `mcp==1.6.0`, which conflicts with
+ADK's `mcp>=1.28`, so it must NOT go in the agent's environment:
+
+```bash
+uv tool install chroma-mcp        # puts `chroma-mcp` on PATH, isolated
+```
+
+Point the agent at a specific executable with `CHROMA_MCP_CMD` if it isn't on
+PATH. The Docker image installs it into a dedicated venv and sets `CHROMA_MCP_CMD`
+automatically.
 
 ### Self-hosted example (llama.cpp) — verified
 

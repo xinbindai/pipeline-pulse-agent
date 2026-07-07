@@ -22,6 +22,13 @@ Configuration (env / a local .env file next to this module):
                      the model that server serves and no real API key is needed.
                        LLM_BASE_URL=http://localhost:8080/v1
                        LLM_MODEL=llama-3.1-8b-instruct
+
+    CHROMA_HOST      Optional. When set, a RAG subagent ('rag_agent') is added
+    CHROMA_PORT      that queries a remote Chroma server through a stdio
+    CHROMA_SSL       `chroma-mcp` process. host/port/ssl are the Chroma HTTP
+    CHROMA_COLLECTION connection; the subagent searches this collection.
+    CHROMA_KB_DESCRIPTION  What the knowledge base holds (drives the subagent's
+                     description/instruction and the root's delegation).
 """
 
 import logging
@@ -34,6 +41,8 @@ from dotenv import load_dotenv
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import (
+    StdioConnectionParams,
+    StdioServerParameters,
     StreamableHTTPConnectionParams,
 )
 
@@ -61,6 +70,22 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "anthropic/claude-opus-4-8")
 
 # OpenAI-compatible base URL for a self-hosted engine (llama.cpp, vLLM, Ollama…).
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL")
+
+# Remote Chroma server for the RAG subagent (via a stdio chroma-mcp process).
+# The RAG subagent is added only when CHROMA_HOST is set.
+CHROMA_HOST = os.environ.get("CHROMA_HOST")
+CHROMA_PORT = os.environ.get("CHROMA_PORT", "8000")
+CHROMA_SSL = os.environ.get("CHROMA_SSL", "false")
+CHROMA_COLLECTION = os.environ.get("CHROMA_COLLECTION", "")
+# chroma-mcp pins mcp==1.6.0, which conflicts with ADK's mcp>=1.28 — so install it
+# ISOLATED from this env (`uv tool install chroma-mcp`, or a dedicated venv) and
+# point CHROMA_MCP_CMD at that executable. Default assumes it's on PATH.
+CHROMA_MCP_CMD = os.environ.get("CHROMA_MCP_CMD", "chroma-mcp")
+# What the knowledge base contains — drives the RAG subagent's description and
+# instruction (and the root agent's delegation), so keep it in config, not code.
+CHROMA_KB_DESCRIPTION = os.environ.get(
+    "CHROMA_KB_DESCRIPTION", "a knowledge base of documents"
+)
 
 
 # ── Model selection (hosted, or self-hosted OpenAI-compatible) ────────────────
@@ -105,6 +130,46 @@ def get_current_time() -> dict:
     }
 
 
+# ── RAG subagent (remote Chroma via a stdio MCP server) ───────────────────────
+def _chroma_toolset() -> McpToolset:
+    """MCP toolset backed by a stdio `chroma-mcp` process that talks to a remote
+    Chroma server (HTTP client). Exposes Chroma's query/collection tools."""
+    return McpToolset(
+        connection_params=StdioConnectionParams(
+            server_params=StdioServerParameters(
+                command=CHROMA_MCP_CMD,
+                args=[
+                    "--client-type", "http",
+                    "--host", CHROMA_HOST,
+                    "--port", str(CHROMA_PORT),
+                    "--ssl", str(CHROMA_SSL).lower(),
+                ],
+            ),
+            timeout=30,
+        ),
+    )
+
+
+def _build_rag_agent() -> LlmAgent:
+    """A subagent that answers from the Chroma knowledge base via semantic search."""
+    return LlmAgent(
+        model=_build_model(LLM_MODEL),
+        name="rag_agent",
+        description=(
+            f"Answers questions about {CHROMA_KB_DESCRIPTION}, stored in a Chroma "
+            "vector store, via semantic search."
+        ),
+        instruction=(
+            f"You answer questions from a knowledge base containing "
+            f"{CHROMA_KB_DESCRIPTION}. Use the chroma query tools to search the "
+            f"'{CHROMA_COLLECTION}' collection for documents relevant to the "
+            "question, then answer grounded strictly in what you retrieve. If "
+            "nothing relevant is found, say so."
+        ),
+        tools=[_chroma_toolset()],
+    )
+
+
 # ── Agent ─────────────────────────────────────────────────────────────────────
 # One toolset per MCP server; the agent sees the union of all their tools plus
 # any local Python functions (ADK wraps a plain function as a FunctionTool).
@@ -113,13 +178,23 @@ _toolsets = [
     for url in SERVER_URLS
 ]
 
+# Add the RAG subagent only when a Chroma host is configured.
+_sub_agents = [_build_rag_agent()] if CHROMA_HOST else []
+_rag_hint = (
+    f" For questions about {CHROMA_KB_DESCRIPTION}, delegate to the 'rag_agent'."
+    if _sub_agents
+    else ""
+)
+
 root_agent = LlmAgent(
     model=_build_model(LLM_MODEL),
     name="pipeline_pulse_agent",
     instruction=(
         "You are a helpful assistant. Use the available tools to answer the "
         "user's question — MCP tools for server data, and the local "
-        "'get_current_time' tool for the current date/time. Be concise."
+        "'get_current_time' tool for the current date/time." + _rag_hint +
+        " Be concise."
     ),
     tools=[*_toolsets, get_current_time],
+    sub_agents=_sub_agents,
 )

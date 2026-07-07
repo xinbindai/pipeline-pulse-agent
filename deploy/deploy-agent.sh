@@ -81,13 +81,15 @@ gcloud artifacts repositories describe "$REPO" --location "$REGION" --project "$
 # Build & push the agent image (pipeline_pulse_agent/Dockerfile + context).
 gcloud builds submit --project "$PROJECT" --tag "$IMAGE" "$REPO_ROOT/pipeline_pulse_agent"
 
-ENV_VARS="MCP_SERVER_URL=${MCP_SERVER_URL},LLM_MODEL=${LLM_MODEL}"
+# Join env vars with '|' — values like MCP_SERVER_URL (multi-endpoint) and
+# CHROMA_KB_DESCRIPTION may contain commas. Passed with gcloud's ^|^ delimiter.
+ENV_VARS="MCP_SERVER_URL=${MCP_SERVER_URL}|LLM_MODEL=${LLM_MODEL}"
 DEPLOY_ARGS=()
 
 case "$LLM_AUTH" in
   vertex)
     gcloud services enable aiplatform.googleapis.com --project "$PROJECT"
-    ENV_VARS="${ENV_VARS},GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION}"
+    ENV_VARS="${ENV_VARS}|GOOGLE_GENAI_USE_VERTEXAI=TRUE|GOOGLE_CLOUD_PROJECT=${PROJECT}|GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION}"
     # The runtime service account needs roles/aiplatform.user. We grant it to the
     # default compute SA here; for least privilege use a dedicated SA and pass
     # --service-account to `gcloud run deploy` below.
@@ -100,11 +102,17 @@ case "$LLM_AUTH" in
     : "${API_KEY_ENV:?set API_KEY_ENV (e.g. ANTHROPIC_API_KEY)}"
     : "${API_KEY_SECRET:?set API_KEY_SECRET (Secret Manager secret name)}"
     DEPLOY_ARGS+=(--set-secrets "${API_KEY_ENV}=${API_KEY_SECRET}:latest")
-    [[ -n "${LLM_BASE_URL:-}" ]] && ENV_VARS="${ENV_VARS},LLM_BASE_URL=${LLM_BASE_URL}"
+    [[ -n "${LLM_BASE_URL:-}" ]] && ENV_VARS="${ENV_VARS}|LLM_BASE_URL=${LLM_BASE_URL}"
     ;;
   *)
     echo "LLM_AUTH must be 'vertex' or 'apikey' (got '$LLM_AUTH')" >&2; exit 1 ;;
 esac
+
+# RAG subagent: pass the remote Chroma connection + KB description if configured.
+if [[ -n "${CHROMA_HOST:-}" ]]; then
+  ENV_VARS="${ENV_VARS}|CHROMA_HOST=${CHROMA_HOST}|CHROMA_PORT=${CHROMA_PORT:-8000}|CHROMA_SSL=${CHROMA_SSL:-false}|CHROMA_COLLECTION=${CHROMA_COLLECTION:-}"
+  [[ -n "${CHROMA_KB_DESCRIPTION:-}" ]] && ENV_VARS="${ENV_VARS}|CHROMA_KB_DESCRIPTION=${CHROMA_KB_DESCRIPTION}"
+fi
 
 # --allow-unauthenticated keeps the demo simple. To lock it down: drop this flag,
 # then grant the UI's service account roles/run.invoker on this service and have
@@ -112,7 +120,7 @@ esac
 gcloud run deploy "$SERVICE" \
   --project "$PROJECT" --region "$REGION" \
   --image "$IMAGE" \
-  --set-env-vars "$ENV_VARS" \
+  --set-env-vars "^|^${ENV_VARS}" \
   --allow-unauthenticated \
   "${DEPLOY_ARGS[@]}"
 

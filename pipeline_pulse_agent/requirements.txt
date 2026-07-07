@@ -11,3 +11,7 @@ google-adk>=1.0.0
 mcp>=1.28                # required for ADK's McpToolset (MCP client tools)
 litellm>=1.50.0          # non-Gemini + self-hosted (LLM_BASE_URL) model paths
 python-dotenv>=1.0.0
+# NOTE: chroma-mcp (the RAG subagent's stdio server) is NOT installed here — it
+# pins mcp==1.6.0, which conflicts with ADK's mcp>=1.28. Install it ISOLATED
+# (`uv tool install chroma-mcp`, or a separate venv) and set CHROMA_MCP_CMD.
+# The Dockerfile installs it into a dedicated venv.

@@ -86,6 +86,12 @@ MCP_SERVER_URL=https://server-a/mcp,https://server-b/mcp
 For a self-hosted model running on your host machine, point the agent at
 `http://host.docker.internal:8080/v1` (the compose file adds that mapping).
 
+**RAG subagent (optional)** — set `CHROMA_HOST` (+ `CHROMA_PORT`, `CHROMA_SSL`,
+`CHROMA_COLLECTION`) to add a `rag_agent` that answers from a remote Chroma vector
+store via a stdio `chroma-mcp` server. See
+[`pipeline_pulse_agent/README.md`](pipeline_pulse_agent/README.md#rag-subagent-remote-chroma)
+(note: `chroma-mcp` must be installed isolated — it pins an older `mcp`).
+
 ## Running without Docker (optional)
 
 **Agent** (Python 3.12, [`uv`](https://docs.astral.sh/uv/)):

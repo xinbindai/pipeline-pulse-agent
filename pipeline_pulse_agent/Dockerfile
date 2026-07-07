@@ -12,10 +12,16 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# RAG subagent's stdio server, in a DEDICATED venv so its mcp==1.6.0 pin can't
+# clash with the agent's mcp>=1.28. CHROMA_MCP_CMD points the agent at it.
+RUN python -m venv /opt/chroma-mcp \
+    && /opt/chroma-mcp/bin/pip install --no-cache-dir chroma-mcp
+
 # Copy the package into /app/pipeline_pulse_agent so it imports as that module.
 COPY . ./pipeline_pulse_agent/
 
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    CHROMA_MCP_CMD=/opt/chroma-mcp/bin/chroma-mcp
 
 EXPOSE 8000
 
