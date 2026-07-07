@@ -13,6 +13,7 @@
 # Optional (defaults shown):
 #   PROJECT (gcloud config)  REGION=us-central1  REPO=pipeline-pulse  SERVICE=pp-chainlit
 #   LLM_MODEL=gemini-2.5-flash  LLM_AUTH=vertex  VERTEX_LOCATION=global
+#   MEMORY=2Gi  CPU=1   (RAG's chroma-mcp embedding model needs >512Mi)
 # apikey mode:  API_KEY_ENV  API_KEY_SECRET  [LLM_BASE_URL]
 set -euo pipefail
 
@@ -30,6 +31,10 @@ LLM_MODEL="${LLM_MODEL:-gemini-2.5-flash}"
 LLM_AUTH="${LLM_AUTH:-vertex}"
 VERTEX_LOCATION="${VERTEX_LOCATION:-global}"   # Vertex model location, separate from REGION
 MCP_SERVER_URL="${MCP_SERVER_URL:?set MCP_SERVER_URL}"
+# The RAG subagent's chroma-mcp loads an embedding model (hundreds of MB), so the
+# 512Mi default OOMs. 2Gi gives headroom; raise if you use larger embeddings.
+MEMORY="${MEMORY:-2Gi}"
+CPU="${CPU:-1}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/chainlit:latest"
 
 # Vertex needs a bare, versioned Gemini id (no provider prefix, no -latest alias).
@@ -56,13 +61,15 @@ gcloud artifacts repositories describe "$REPO" --location "$REGION" --project "$
 # Build & push the single image (repo-root Dockerfile).
 gcloud builds submit --project "$PROJECT" --tag "$IMAGE" "$REPO_ROOT"
 
-ENV_VARS="MCP_SERVER_URL=${MCP_SERVER_URL},LLM_MODEL=${LLM_MODEL}"
+# Join env vars with '|' — values like MCP_SERVER_URL (multi-endpoint) and
+# CHROMA_KB_DESCRIPTION may contain commas. Passed with gcloud's ^|^ delimiter.
+ENV_VARS="MCP_SERVER_URL=${MCP_SERVER_URL}|LLM_MODEL=${LLM_MODEL}"
 DEPLOY_ARGS=()
 
 case "$LLM_AUTH" in
   vertex)
     gcloud services enable aiplatform.googleapis.com --project "$PROJECT"
-    ENV_VARS="${ENV_VARS},GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION}"
+    ENV_VARS="${ENV_VARS}|GOOGLE_GENAI_USE_VERTEXAI=TRUE|GOOGLE_CLOUD_PROJECT=${PROJECT}|GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION}"
     PNUM="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
     gcloud projects add-iam-policy-binding "$PROJECT" \
       --member="serviceAccount:${PNUM}-compute@developer.gserviceaccount.com" \
@@ -72,17 +79,25 @@ case "$LLM_AUTH" in
     : "${API_KEY_ENV:?set API_KEY_ENV (e.g. ANTHROPIC_API_KEY)}"
     : "${API_KEY_SECRET:?set API_KEY_SECRET (Secret Manager secret name)}"
     DEPLOY_ARGS+=(--set-secrets "${API_KEY_ENV}=${API_KEY_SECRET}:latest")
-    [[ -n "${LLM_BASE_URL:-}" ]] && ENV_VARS="${ENV_VARS},LLM_BASE_URL=${LLM_BASE_URL}"
+    [[ -n "${LLM_BASE_URL:-}" ]] && ENV_VARS="${ENV_VARS}|LLM_BASE_URL=${LLM_BASE_URL}"
     ;;
   *)
     echo "LLM_AUTH must be 'vertex' or 'apikey' (got '$LLM_AUTH')" >&2; exit 1 ;;
 esac
 
+# RAG subagent: pass the remote Chroma connection + KB description if configured.
+if [[ -n "${CHROMA_HOST:-}" ]]; then
+  ENV_VARS="${ENV_VARS}|CHROMA_HOST=${CHROMA_HOST}|CHROMA_PORT=${CHROMA_PORT:-8000}|CHROMA_SSL=${CHROMA_SSL:-false}|CHROMA_COLLECTION=${CHROMA_COLLECTION:-}"
+  [[ -n "${CHROMA_KB_DESCRIPTION:-}" ]] && ENV_VARS="${ENV_VARS}|CHROMA_KB_DESCRIPTION=${CHROMA_KB_DESCRIPTION}"
+fi
+
 # --session-affinity keeps a browser pinned to one instance (Chainlit uses WebSockets).
 gcloud run deploy "$SERVICE" \
   --project "$PROJECT" --region "$REGION" \
   --image "$IMAGE" \
-  --set-env-vars "$ENV_VARS" \
+  --set-env-vars "^|^${ENV_VARS}" \
+  --memory "$MEMORY" \
+  --cpu "$CPU" \
   --allow-unauthenticated \
   --session-affinity \
   "${DEPLOY_ARGS[@]}"

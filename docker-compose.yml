@@ -1,0 +1,18 @@
+# Local testing: build + run the Chainlit UI + ADK agent (single service).
+#   docker compose up --build     ->  http://localhost:8000
+#
+# Config (LLM, MCP_SERVER_URL, CHROMA_* for the RAG subagent) comes from
+# pipeline_pulse_agent/.env — the same file `chainlit run` uses locally.
+services:
+  chainlit:
+    build: .
+    image: pp-chainlit
+    ports:
+      - "8000:8000"
+    env_file:
+      - pipeline_pulse_agent/.env
+    # Lets the agent reach a self-hosted LLM running on the host, e.g.
+    #   LLM_BASE_URL=http://host.docker.internal:8080/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

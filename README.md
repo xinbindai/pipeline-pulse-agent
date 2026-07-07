@@ -57,6 +57,11 @@ runtime; never baked into the image):
   | Gemini (API key) | `gemini-2.5-flash` | `GOOGLE_API_KEY` |
   | Self-hosted (llama.cpp, vLLM, …) | the served model name | `LLM_BASE_URL=http://host:8080/v1` |
 
+- **RAG subagent (optional)** — set `CHROMA_HOST` (+ `CHROMA_PORT`, `CHROMA_SSL`,
+  `CHROMA_COLLECTION`, `CHROMA_KB_DESCRIPTION`) to add a `rag_agent` that answers
+  from a remote Chroma vector store via a stdio `chroma-mcp` server. `chroma-mcp`
+  is installed isolated (it pins an older `mcp`); the Dockerfile handles that.
+
 See [`pipeline_pulse_agent/README.md`](pipeline_pulse_agent/README.md) for agent
 details (incl. running the agent standalone with `adk run`, and the llama.cpp setup).
 
