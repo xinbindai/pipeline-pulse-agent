@@ -15,6 +15,7 @@
 #   REGION=us-central1  REPO=pipeline-pulse  SERVICE=pp-agent   (REGION = Cloud Run region)
 #   LLM_MODEL=gemini-2.5-flash   LLM_AUTH=vertex
 #   VERTEX_LOCATION=global   Vertex model location (separate from REGION; newest models are global-only)
+#   MEMORY=2Gi  CPU=1        (RAG's chroma-mcp embedding model needs >512Mi)
 # if LLM_AUTH is in apikey mode:
 #   API_KEY_ENV       env var the agent reads (ANTHROPIC_API_KEY | OPENAI_API_KEY | GOOGLE_API_KEY)
 #   API_KEY_SECRET    Secret Manager secret holding the key (create it first, see below)
@@ -51,6 +52,10 @@ LLM_AUTH="${LLM_AUTH:-vertex}"
 # newest models and best availability (the latest ones are global-only).
 VERTEX_LOCATION="${VERTEX_LOCATION:-global}"
 MCP_SERVER_URL="${MCP_SERVER_URL:?set MCP_SERVER_URL}"
+# The RAG subagent's chroma-mcp loads an embedding model (hundreds of MB), so the
+# 512Mi default OOMs. 2Gi gives headroom; raise if you use larger embeddings.
+MEMORY="${MEMORY:-2Gi}"
+CPU="${CPU:-1}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/agent:latest"
 
 # Fail fast on an incompatible combo. Keyless Vertex only works via the agent's
@@ -121,6 +126,8 @@ gcloud run deploy "$SERVICE" \
   --project "$PROJECT" --region "$REGION" \
   --image "$IMAGE" \
   --set-env-vars "^|^${ENV_VARS}" \
+  --memory "$MEMORY" \
+  --cpu "$CPU" \
   --allow-unauthenticated \
   "${DEPLOY_ARGS[@]}"
 
