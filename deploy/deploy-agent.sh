@@ -128,6 +128,7 @@ gcloud run deploy "$SERVICE" \
   --set-env-vars "^|^${ENV_VARS}" \
   --memory "$MEMORY" \
   --cpu "$CPU" \
+  --cpu-boost \
   --allow-unauthenticated \
   "${DEPLOY_ARGS[@]}"
 

@@ -20,12 +20,12 @@ WORKDIR /ui
 ENV NODE_ENV=production \
     COPILOTKIT_TELEMETRY_DISABLED=true \
     AGUI_BACKEND_URL=http://localhost:8000/
-COPY --from=build /ui/node_modules ./node_modules
-COPY --from=build /ui/.next ./.next
-COPY --from=build /ui/package.json ./package.json
-COPY --from=build /ui/next.config.mjs ./next.config.mjs
+# Next.js standalone output: a minimal server + only the node_modules it traced.
+COPY --from=build /ui/.next/standalone ./
+COPY --from=build /ui/.next/static ./.next/static
 
 EXPOSE 3000
 
+# server.js is emitted by the standalone build; it honors PORT and HOSTNAME.
 # Cloud Run injects $PORT (8080); defaults to 3000 locally.
-CMD ["sh", "-c", "node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}"]
+CMD ["sh", "-c", "HOSTNAME=0.0.0.0 PORT=${PORT:-3000} node server.js"]

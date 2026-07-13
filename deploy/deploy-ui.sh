@@ -42,6 +42,7 @@ gcloud run deploy "$SERVICE" \
   --project "$PROJECT" --region "$REGION" \
   --image "$IMAGE" \
   --set-env-vars "AGUI_BACKEND_URL=${AGENT_URL}" \
+  --cpu-boost \
   --allow-unauthenticated
 
 echo
