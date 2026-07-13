@@ -202,8 +202,8 @@ function Chat({ threadId, onTitle }: { threadId: string; onTitle: (id: string, t
       <CopilotChat
         className="h-full"
         labels={{
-          title: "Pipeline Pulse",
-          initial: "Ask about incidents (e.g. \"How many are Open?\") or the current time.",
+          title: "Pipeline Pulse Agent UI",
+          initial: "Ask about ServiceNow Incident Tickets (e.g. \"INC0042047\").",
         }}
       />
     </div>
