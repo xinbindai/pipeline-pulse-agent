@@ -4,6 +4,7 @@
 # Optional (defaults shown):
 #   PROJECT           GCP project id (defaults to `gcloud config get-value project`)
 #   REGION=us-central1  REPO=pipeline-pulse  SERVICE=pp-ui  AGENT_SERVICE=pp-agent
+#   MEMORY=512Mi  CPU=1   Cloud Run resources for the UI service
 #   AGENT_URL         agent base URL; auto-discovered from AGENT_SERVICE if unset
 #
 # Deploy the agent first (deploy-agent.sh), then:
@@ -23,6 +24,9 @@ REGION="${REGION:-us-central1}"
 REPO="${REPO:-pipeline-pulse}"
 SERVICE="${SERVICE:-pp-ui}"
 AGENT_SERVICE="${AGENT_SERVICE:-pp-agent}"
+# The UI is a lightweight Next.js server; 512Mi / 1 vCPU is plenty. Override in ui.env.
+MEMORY="${MEMORY:-512Mi}"
+CPU="${CPU:-1}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/ui:latest"
 
 # Resolve the agent service URL (unless provided explicitly).
@@ -42,6 +46,8 @@ gcloud run deploy "$SERVICE" \
   --project "$PROJECT" --region "$REGION" \
   --image "$IMAGE" \
   --set-env-vars "AGUI_BACKEND_URL=${AGENT_URL}" \
+  --memory "$MEMORY" \
+  --cpu "$CPU" \
   --cpu-boost \
   --allow-unauthenticated
 
