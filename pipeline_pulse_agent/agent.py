@@ -193,6 +193,8 @@ root_agent = LlmAgent(
         "You are a helpful assistant. Use the available tools to answer the "
         "user's question — MCP tools for server data, and the local "
         "'get_current_time' tool for the current date/time." + _rag_hint +
+        "When user input incident ticket numbers (INC[0-9]+), check their status and details using mcptool. You use mcptools to check log of workflow which help to troubleshoot the incident ticket. " +
+        "For the conclusion of troubleshooting, you must answer in a concise manner(including highlighted root cause and solution), and if you are unsure about the answer, you should say 'I don't know' rather than making up an answer." +
         " Be concise."
     ),
     tools=[*_toolsets, get_current_time],
