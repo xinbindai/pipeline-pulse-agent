@@ -3,19 +3,25 @@
 #   docker compose up --build
 #   UI -> http://localhost:3000   (the only published port)
 #
-# LLM auth is via API KEY here (simple for dev). Put the config in
-# pipeline_pulse_agent/.env:
-#   - a hosted provider:  LLM_MODEL=anthropic/claude-opus-4-8  + ANTHROPIC_API_KEY=...
-#                         LLM_MODEL=gemini-flash-latest        + GOOGLE_API_KEY=...
-#   - self-hosted:        LLM_BASE_URL=http://host.docker.internal:8080/v1
-#                         LLM_MODEL=<model served>   (llama.cpp on the host)
+# LLM config lives in pipeline_pulse_agent/.env:
+#   - keyless Gemini (Vertex):  GOOGLE_GENAI_USE_VERTEXAI=TRUE + project/location
+#         needs host ADC (mounted below); run `gcloud auth application-default login`
+#   - API key:  LLM_MODEL=anthropic/claude-opus-4-8 + ANTHROPIC_API_KEY=...  (etc.)
+#   - self-hosted:  LLM_BASE_URL=http://host.docker.internal:8080/v1
 services:
   agent:
     build:
       context: ./pipeline_pulse_agent
     image: pp-agent
     env_file:
-      - pipeline_pulse_agent/.env      # MCP_SERVER_URL, LLM_MODEL, API key / LLM_BASE_URL
+      - pipeline_pulse_agent/.env      # MCP_SERVER_URL, LLM_MODEL, Vertex or API key
+    # Keyless Vertex (GOOGLE_GENAI_USE_VERTEXAI=TRUE in .env): mount your host ADC.
+    # One-time on the host:  gcloud auth application-default login
+    # (Harmless / ignored when using an API key instead.)
+    volumes:
+      - ${HOME}/.config/gcloud:/gcloud:ro
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /gcloud/application_default_credentials.json
     # Lets the agent reach a self-hosted LLM running on the host machine.
     extra_hosts:
       - "host.docker.internal:host-gateway"
